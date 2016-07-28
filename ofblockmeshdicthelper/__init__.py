@@ -6,7 +6,6 @@ import io
 from collections import Iterable
 from string import Template
 
-
 class Vertex(object):
     def __init__(self, x, y, z, name, index=None):
         self.x = x
@@ -15,9 +14,27 @@ class Vertex(object):
         self.name = name  # identical name
         self.alias = set([name])  # aliasname, self.name should be included
 
+        # Generating vertex *tag*
+        # (1) *Tag* is an unique indentifier of vertex coordinate.
+        # (2) The primary purpose of *tag* is automatic reduction of 
+        #     duplicate vertices. All vertices with the same *tag* will be  
+        #     automatically reduce to one vertex.
+        # (3) *Tag* is defined as tuple of rounded vertex coordinate.
+        #     Vertex coordinates (x, y, z) will be temperoraly rounded to 
+        #     nearest grid values (x_, y_, z_) to generate vertex *tag*.
+        self.tag = tuple((self.grid(x), self.grid(y), self.grid(z)))
+
         # seqential index which is assigned at final output
         # for blocks, edges, boundaries
         self.index = None
+
+    def grid(self, coord):
+        # Grid resolution (GR) in current metric
+        GR = 1e-9
+        # Any geometry details that are smaller than GR will be lost.
+        # With a reasonable choice of metric, GR = 1e-9 should be 
+        # enough for general problems.
+        return round( coord / GR ) * GR
 
     def format(self):
         com = str(self.index) + ' ' + self.name
@@ -29,9 +46,11 @@ class Vertex(object):
 
     def __lt__(self, rhs):
         return (self.z, self.y, self.x) < (rhs.z, rhs.y, rhs.z)
+        #return self.tag < rhs.tag
 
     def __eq__(self, rhs):
         return (self.z, self.y, self.x) == (rhs.z, rhs.y, rhs.z)
+        #return self.tag == rhs.tag
 
 
 class Face(object):
@@ -231,6 +250,7 @@ class Boundary(object):
 class BlockMeshDict(object):
     def __init__(self):
         self.convert_to_meters = 1.0
+        self.vnames = {}  # mapping of tag to uniq name 
         self.vertices = {}  # mapping of uniq name to Vertex object
         self.blocks = {}
         self.edges = {}
@@ -255,26 +275,30 @@ class BlockMeshDict(object):
         name is uniq name to refer the vertex
         returns Vertex object whici is added.
         """
-        self.vertices[name] = Vertex(x, y, z, name)
+        v = Vertex(x, y, z, name)
+        self.vertices[name] = v
+        self.vnames[v.tag] = name
         return self.vertices[name]
 
     def del_vertex(self, name):
         """del name key from self.vertices"""
         del self.vertices[name]
+        for tag in self.vnames.keys()[list(self.vnames.values().index(name))]:
+            del self.vnames[tag]
 
-    def reduce_vertex(self, name1, *names):
-        """treat name1, name2, ... as same point.
+    #def reduce_vertex(self, name1, *names):
+    #    """treat name1, name2, ... as same point.
 
-        name2.alias, name3.alias, ... are merged with name1.alias
-        the key name2, name3, ... in self.vertices are kept and mapped to
-        same Vertex instance as name1
-        """
-        v = self.vertices[name1]
-        for n in names:
-            w = self.vertices[n]
-            v.alias.update(w.alias)
-            # replace mapping from n w by to v
-            self.vertices[n] = v
+    #    name2.alias, name3.alias, ... are merged with name1.alias
+    #    the key name2, name3, ... in self.vertices are kept and mapped to
+    #    same Vertex instance as name1
+    #    """
+    #    v = self.vertices[name1]
+    #    for n in names:
+    #        w = self.vertices[n]
+    #        v.alias.update(w.alias)
+    #        # replace mapping from n w by to v
+    #        self.vertices[n] = v
 
     def add_hexblock(self, vnames, cells, name, grading=SimpleGrading(1, 1, 1)):
         b = HexBlock(vnames, cells, name, grading)
@@ -299,14 +323,26 @@ class BlockMeshDict(object):
         """
 
         # gather 'uniq' names which are refferred by blocks
-        validvnames = set()
+        # validvnames = set()
+        validvtags = set()
         self.valid_vertices = []
         for b in self.blocks.values():
             for n in b.vnames:
                 v = self.vertices[n]
-                if v.name not in validvnames:
-                    validvnames.update([v.name])
+                if v.tag not in validvtags:
+                    validvtags.update([v.tag])
                     self.valid_vertices.append(v)
+                else:
+                    for v_old in self.valid_vertices:
+                        if v_old.tag == v.tag:
+                            v_old.alias.update(v.alias)
+                            # delete duplicated vertex is not necessary
+                            self.vertices[n] = v_old 
+
+                            ##debug##
+                            #print("\nVertex "+n+" duplicates with previous vertex " +
+                            #        v_old.name+".\n")
+                            #########
 
         self.valid_vertices = sorted(self.valid_vertices)
         for i, v in enumerate(self.valid_vertices):
