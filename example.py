@@ -14,6 +14,8 @@ wedgedegree = 5.0
 # geometries
 radius_x = 0.19
 length_z = 1.1
+arc_x = 0.1
+arc_z = length_z/2.0
 
 # prepare ofblockmeshdicthelper.BlockMeshDict instance to
 # gather vertices, blocks, faces and boundaries.
@@ -26,8 +28,10 @@ bmd.set_metric('m')
 basevs = [
     Vertex(0, 0, 0, 'v0'),
     Vertex(radius_x, 0, 0, 'v1'),
-    Vertex(radius_x, 0, length_z, 'v2'),
+    Vertex(radius_x, 1, length_z, 'v2'),
     Vertex(0, 0, length_z, 'v3')]
+
+arcvs = [Vertex(arc_x, 0, length_z/2.0, 'varc')]
 
 # rotate wedgedegree/2 around z axis
 # rotated vertices are named with '-y' or '+y' suffix.
@@ -38,10 +42,13 @@ sind = math.sin(math.radians(wedgedegree/2.0))
 for v in basevs:
     bmd.add_vertex(v.x*cosd, -v.x*sind, v.z, v.name+'-y')
     bmd.add_vertex(v.x*cosd,  v.x*sind, v.z, v.name+'+y')
+for v in arcvs:
+    arcvs_minus_y = Vertex(v.x*cosd, -v.x*sind, v.z, v.name+'-y')
+    arcvs_plus_y = Vertex(v.x*cosd,  v.x*sind, v.z, v.name+'+y')
 
 # v0+y and v3+y have same coordinate as v0-y and v3-y, respectively.
-bmd.reduce_vertex('v0-y', 'v0+y')
-bmd.reduce_vertex('v3-y', 'v3+y')
+#bmd.reduce_vertex('v0-y', 'v0+y')
+#bmd.reduce_vertex('v3-y', 'v3+y')
 
 
 # utility to to generate vertex names
@@ -66,7 +73,14 @@ bmd.add_boundary('patch', 'inlet', [b0.face('zm')])
 bmd.add_boundary('patch', 'outlet', [b0.face('zp')])
 bmd.add_boundary('empty', 'axis', [b0.face('xm')])
 
+bmd.add_arcedge(('v1+y', 'v2+y'), 'arcvs+y', arcvs_plus_y)
+bmd.add_arcedge(('v1-y', 'v2-y'), 'arcvs-y', arcvs_minus_y)
+
 # prepare for output
 bmd.assign_vertexid()
 # output
-print(bmd.format())
+#print(bmd.format())
+string = bmd.format()
+f = open("blockMeshDict", "w")
+f.write(string)
+f.close
