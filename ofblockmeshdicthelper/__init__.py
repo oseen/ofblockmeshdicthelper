@@ -302,7 +302,28 @@ class BlockMeshDict(object):
 
     def add_hexblock(self, vnames, cells, name, grading=SimpleGrading(1, 1, 1)):
         b = HexBlock(vnames, cells, name, grading)
-        self.blocks[name] = b
+        # self.blocks[name] = b
+        self.blocks[tuple(vnames)] = b
+        # In the original code, self.blocks is a dict of all blocks 
+        #     indexed by *block names*, so *block names* must be unique here
+        #
+        # However, the *block names* will be written in each block line in
+        #     blockMeshDict, and it will be interpreted as *region names* in
+        #     multi-region mesh. since the region names are not unique
+        #     (serveral blocks can probably share a common region name)
+        #     the *block names* should not be unique either.
+        #
+        # For example, the following mesh consists of four blocks, 
+        #     two of the four blocks are of region A, and the other 
+        #     two blocks are of region B. 
+        # ---------------------------------------------
+        # |          |          |          |          |
+        # | (block1) | (block2) | (block3) | (block4) |
+        # | region A | region A | region B | region B |
+        # |          |          |          |          |
+        # ---------------------------------------------
+        # If we use 'region A' or 'region B' as the block index in the 
+        #     self.blocks dict, two of the four blocks will be lost
         return b
 
     def add_arcedge(self, vnames, name, interVertex):
